@@ -23,6 +23,8 @@
 #include "RMSDBase.h"
 #include "tools/Matrix.h"
 #include "tools/Exception.h"
+#include <iostream>
+using namespace std;
 
 namespace PLMD{
 
@@ -30,7 +32,7 @@ namespace PLMD{
 /// so that the public function of rmsd are threadsafe while the inner core can safely share information 
 class RMSDCoreData
 {
-	public:
+	private:
 		bool alEqDis;
 		bool distanceIsSquared;
 		bool hasDistance;
@@ -44,17 +46,12 @@ class RMSDCoreData
                 const std::vector<double> &align;
                 // Weights for deviation
                 const std::vector<double> &displace;
-		// the constructor (note: only references are passed, therefore is rather fast)
-		RMSDCoreData(const std::vector<double> &a ,const std::vector<double> &d,const std::vector<Vector> &p, const std::vector<Vector> &r ):alEqDis(false),distanceIsSquared(false),hasDistance(false),isInitialized(false),safe(false),positions(p),reference(r),align(a),displace(d){};
-		// this is a function that does the core calc 	
-		void doCoreCalc(bool safe,bool alEqDis);
 // the needed stuff for distance and more (one could use eigenvecs components and eigenvals for some reason)
 		double dist;
 		std::vector<double> eigenvals;
 		Matrix<double> eigenvecs;
 		double rr00; //  sum of positions squared (needed for dist calc)
 		double rr11; //  sum of reference squared (needed for dist calc)
- 
 // rotation derived from the eigenvector having the smallest eigenvalue
 		Tensor rotation;
 // derivative of the rotation only available when align!=displace
@@ -65,7 +62,15 @@ class RMSDCoreData
 		std::vector<Vector> d;
 // geometric center of the running position and reference
  		Vector cpositions,creference;
-
+	public:
+		// the constructor (note: only references are passed, therefore is rather fast)
+		RMSDCoreData(const std::vector<double> &a ,const std::vector<double> &d,const std::vector<Vector> &p, const std::vector<Vector> &r ):alEqDis(false),distanceIsSquared(false),hasDistance(false),isInitialized(false),safe(false),positions(p),reference(r),align(a),displace(d){};
+		//  does the core calc : first thing to call after the constructor	
+		void doCoreCalc(bool safe,bool alEqDis);
+		// retrieve the distance if required after doCoreCalc 
+		double retrieveDistance(bool squared);
+		// retrieve the derivative of the distance respect to the position
+		void retrieveDDistanceDPositions(std::vector<Vector>  &derivatives);
 };
 
 class OptimalRMSD : public RMSDBase {
@@ -317,16 +322,13 @@ double OptimalRMSD::optimalAlignment(const  std::vector<double>  & align,
                               bool squared){
    //initialize the data into the structure
    RMSDCoreData cd(align,displace,positions,getReferencePositions()); 
-   // TODO: now just ignorance....
-   //           safe alEqDis
    // Perform the diagonalization and all the needed stuff
    cd.doCoreCalc(safe,alEqDis); 
-//   // make the core calc distance
-//   double dist=coreCalcDistance(cd,squared); 
-//   // make the derivatives by using pieces calculated in coreCalc 
-//   coreCalcDDistanceDReference(derivatives,cd); 
-//   return dist;    
-
+   // make the core calc distance
+   double dist=cd.retrieveDistance(squared); 
+   // make the derivatives by using pieces calculated in coreCalc (probably the best is just to copy the vector...) 
+   cd.retrieveDDistanceDPositions(atom_ders); 
+   return dist;    
 }
 /// This calculates the elements needed by the quaternion to calculate everything that is needed
 /// additional calls retrieve different components
@@ -476,6 +478,74 @@ void RMSDCoreData::doCoreCalc(bool safe,bool alEqDis){
   isInitialized=true;
 
 }
+/// just retrieve the distance already calculated
+double RMSDCoreData::retrieveDistance(bool squared){
+
+  if(!isInitialized)plumed_merror("OptimalRMSD.cpp cannot calculate the distance without being initialized first by doCoreCalc ");
+  dist=eigenvals[0]+rr00+rr11;
+  double prefactor=2.0;
+  
+  if(!squared && alEqDis) prefactor*=0.5/sqrt(dist);
+  if(safe || !alEqDis) dist=0.0;
+  const unsigned n=static_cast<unsigned int>(reference.size());
+  for(unsigned iat=0;iat<n;iat++){
+  	if(alEqDis){
+  	    if(safe) dist+=align[iat]*modulo2(d[iat]);
+  	} else {
+  	    dist+=displace[iat]*modulo2(d[iat]);
+  	}
+  }
+  if(!squared){
+  	dist=sqrt(dist);
+	distanceIsSquared=false;
+  }else{
+	distanceIsSquared=true;
+  }
+  hasDistance=true;
+  return dist; 
+}
+
+void RMSDCoreData::retrieveDDistanceDPositions(std::vector<Vector>  &derivatives){
+  const unsigned n=static_cast<unsigned int>(reference.size());
+  Vector ddist_dcpositions;
+  derivatives.resize(n);
+  double prefactor=2.0;
+  if(!hasDistance)plumed_merror("retrieveDPositionsDerivatives needs to calculate the distance via retrieveDistance first !");
+  if(!isInitialized)plumed_merror("retrieveDPositionsDerivatives needs to initialize the coreData first!");
+// third expensive loop: derivatives
+  for(unsigned iat=0;iat<n;iat++){
+    if(alEqDis){
+// there is no need for derivatives of rotation and shift here as it is by construction zero
+// (similar to Hellman-Feynman forces)
+      derivatives[iat]= prefactor*align[iat]*d[iat];
+    } else {
+// these are the derivatives assuming the roto-translation as frozen
+      derivatives[iat]= 2*displace[iat]*d[iat];
+// derivative of cpositions
+      ddist_dcpositions+=-2*displace[iat]*d[iat];
+    }
+  }
+
+  if(!alEqDis){
+    for(unsigned iat=0;iat<n;iat++){
+// this is propagating to positions.
+// I am implicitly using the derivative of rr01 wrt positions here
+      derivatives[iat]+=matmul(ddist_drr01,reference[iat]-creference)*align[iat];  
+      // these derivatives below are not needed: if coms change the rotation matrices and the distance do not change!
+      //for(unsigned jat=0;jat<n;jat++){
+      //        derivatives[iat]+=-matmul(ddist_drr01,reference[jat]-creference)*align[iat]*align[jat];
+      //}
+      derivatives[iat]+=ddist_dcpositions*align[iat];
+    }
+  }
+  if(!distanceIsSquared){
+    if(!alEqDis){
+      double xx=0.5/dist;
+      for(unsigned iat=0;iat<n;iat++) derivatives[iat]*=xx;
+    }
+  }
+}
+
 
 #endif
 
