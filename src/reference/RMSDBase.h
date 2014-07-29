@@ -25,6 +25,7 @@
 #include <vector>
 #include <string>
 #include "SingleDomainRMSD.h"
+#include "tools/Matrix.h"
 
 namespace PLMD {
 
@@ -35,6 +36,10 @@ public:
   RMSDBase( const ReferenceConfigurationOptions& ro );
   double calc( const std::vector<Vector>& pos, const Pbc& pbc, const bool& squared );
   double calculate( const std::vector<Vector>& pos, const bool& squared );
+  double calculate_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef);
+  virtual double calc_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef);
+  virtual double calc_DDistDRef_Rot_DRotDPos( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef,Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos);
+  virtual double calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef,Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, Matrix<std::vector<Vector> > & DRotDRef);
   virtual double calc( const std::vector<Vector>& pos, const bool& squared )=0;
 };
 
