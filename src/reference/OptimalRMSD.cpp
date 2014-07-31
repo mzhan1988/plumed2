@@ -723,11 +723,14 @@ Matrix<std::vector<Vector> >  RMSDCoreData::getDRotationDPosition( ){
   // remember drotation_drr01 is Tensor drotation_drr01[3][3]
   //           (3x3 rot) (3x3 components of rr01)    
   std::vector<Vector> v(n);
+  Vector csum;
+  for(unsigned iat=0;iat<n;iat++) csum+=(reference[iat]-creference)*align[iat];
+  for(unsigned iat=0;iat<n;iat++) v[iat]=(reference[iat]-creference-csum)*align[iat];
   for(unsigned a=0;a<3;a++){
   	for(unsigned b=0;b<3;b++){
 		DRotDPos[a][b].resize(n);
   		for(unsigned iat=0;iat<n;iat++){
-  		      DRotDPos[a][b][iat]=align[iat]*matmul(drotation_drr01[a][b],reference[iat]-creference);
+  		      DRotDPos[a][b][iat]=matmul(drotation_drr01[a][b],v[iat]);
   		}
   	}
   }
@@ -741,12 +744,16 @@ Matrix<std::vector<Vector> >  RMSDCoreData::getDRotationDReference( ){
   // remember drotation_drr01 is Tensor drotation_drr01[3][3]
   //           (3x3 rot) (3x3 components of rr01)    
   std::vector<Vector> v(n);
+  Vector csum;
+  for(unsigned iat=0;iat<n;iat++) csum+=(positions[iat]-cpositions)*align[iat];
+  for(unsigned iat=0;iat<n;iat++) v[iat]=(positions[iat]-cpositions-csum)*align[iat];
+ 
   for(unsigned a=0;a<3;a++){
   	for(unsigned b=0;b<3;b++){
 		DRotDRef[a][b].resize(n);
 		Tensor t_drotation_drr01=drotation_drr01[a][b].transpose();
   		for(unsigned iat=0;iat<n;iat++){
-  		      DRotDRef[a][b][iat]=align[iat]*matmul(t_drotation_drr01,positions[iat]-cpositions);
+  		      DRotDRef[a][b][iat]=matmul(t_drotation_drr01,v[iat]);
   		}
   	}
   }
