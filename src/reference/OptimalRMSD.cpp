@@ -638,6 +638,7 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
   if(!isInitialized)plumed_merror("getDPositionsDerivatives needs to initialize the coreData first!");
   vector<Vector> ddist_tmp(n);
   Vector csum;
+  Vector tmp1,tmp2;
   for(unsigned iat=0;iat<n;iat++){
     if(alEqDis){
 // there is no need for derivatives of rotation and shift here as it is by construction zero
@@ -645,20 +646,19 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
       derivatives[iat]= prefactor*align[iat]*d[iat];
     } else {
 // these are the derivatives assuming the roto-translation as frozen
-      derivatives[iat]= 2*displace[iat]*d[iat];
+      tmp1=2*displace[iat]*d[iat];
+      derivatives[iat]=tmp1;
 // derivative of cpositions
-      ddist_dcpositions+=-2*displace[iat]*d[iat];
+      ddist_dcpositions+=-tmp1;
       // these needed for com corrections
-      ddist_tmp[iat]=matmul(ddist_drr01,reference[iat]-creference)*align[iat];	
-      csum+=ddist_tmp[iat];
+      tmp2=matmul(ddist_drr01,reference[iat]-creference)*align[iat];	
+      derivatives[iat]+=tmp2;	
+      csum+=tmp2;
     }
   }
 
   if(!alEqDis){
-    for(unsigned iat=0;iat<n;iat++){
-      derivatives[iat]+=ddist_tmp[iat]-csum*align[iat];
-      derivatives[iat]+=ddist_dcpositions*align[iat];
-    }
+    for(unsigned iat=0;iat<n;iat++)derivatives[iat]+=(ddist_dcpositions-csum)*align[iat]; 
   }
   if(!distanceIsSquared){
     if(!alEqDis){
@@ -676,13 +676,14 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
   derivatives.resize(n);
   double prefactor=2.0;
   vector<Vector> ddist_tmp(n);
-  Vector csum;
+  Vector csum,tmp1,tmp2;
+
   if(!hasDistance)plumed_merror("getDDistanceDReference needs to calculate the distance via getDistance first !");
   if(!isInitialized)plumed_merror("getDDistanceDReference to initialize the coreData first!");
   // get the transpose rotation
   Tensor t_rotation=rotation.transpose();
   Tensor t_ddist_drr01=ddist_drr01.transpose();	
-
+  
 // third expensive loop: derivatives
   for(unsigned iat=0;iat<n;iat++){
     if(alEqDis){
@@ -692,20 +693,19 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
       derivatives[iat]= -prefactor*align[iat]*matmul(t_rotation,d[iat]);
     } else {
 // these are the derivatives assuming the roto-translation as frozen
-      derivatives[iat]= -2*displace[iat]*matmul(t_rotation,d[iat]);
+      tmp1=2*displace[iat]*matmul(t_rotation,d[iat]);
+      derivatives[iat]= -tmp1;
 // derivative of cpositions
-      ddist_dcreference+=2*displace[iat]*matmul(t_rotation,d[iat]);
+      ddist_dcreference+=tmp1;
       // these below are needed for com correction
-      ddist_tmp[iat]=matmul(t_ddist_drr01,positions[iat]-cpositions)*align[iat];
-      csum+=ddist_tmp[iat]; 
+      tmp2=matmul(t_ddist_drr01,positions[iat]-cpositions)*align[iat];
+      derivatives[iat]+=tmp2;	
+      csum+=tmp2; 
     }
   }
 
   if(!alEqDis){
-    for(unsigned iat=0;iat<n;iat++){
-      derivatives[iat]+=ddist_dcreference*align[iat];
-      derivatives[iat]+=ddist_tmp[iat]-csum*align[iat]; 	 
-    }
+    for(unsigned iat=0;iat<n;iat++)derivatives[iat]+=(ddist_dcreference-csum)*align[iat]; 
   }
   if(!distanceIsSquared){
     if(!alEqDis){
