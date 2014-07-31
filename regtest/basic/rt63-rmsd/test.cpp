@@ -19,7 +19,8 @@ using namespace PLMD;
 int main(int argc, char* argv[]) {
 
   // findiff step: eps
-  double eps=1.e-4;
+  double eps=1.e-6;
+  bool squared=true;
 
   // default task, calculate the RMSD of one frame respect to a set of others 
   vector<int> task(1);task[0]=0;
@@ -74,7 +75,14 @@ int main(int argc, char* argv[]) {
   std::vector<double> align; align=pdb.getOccupancy();
   std::vector<double> displace;  displace=pdb.getBeta();
 
-  bool squared=false;
+  // reset some stuff
+
+  rmsd->setResetCom(false);
+  rmsd->setNormalizeWeights(false);
+  rmsd->setReferenceAtoms( ref, align, displace );
+
+
+
   
   // Task 0: calculate the alignment and dump some data
   if(std::find(task.begin(), task.end(), 0)!=task.end()){
@@ -140,9 +148,12 @@ int main(int argc, char* argv[]) {
   // Task 4: calculate findiff of reference frame for fast version (align=displace)
   if(std::find(task.begin(), task.end(), 4)!=task.end()){
 	cout<<"Task 4: calculates the finite difference for the reference frame"<<endl;
+	rmsd->setReferenceAtoms( ref, align, displace );
   	double r_old=rmsd->calculate( run, squared ); 
-	std::vector<Vector> ref_save=ref;	
+  	//r_old=rmsd->calculate( run, squared ); 
+	//cout<<"ROLD "<<r_old<<endl;
 	std::vector<Vector> DDistDRef;	
+	std::vector<Vector> ref_save=ref;	
 	for(unsigned int comp=0;comp<3;comp++){	
 		for(unsigned int i=0;i<run.size();++i){
 			//change the position		
@@ -150,7 +161,7 @@ int main(int argc, char* argv[]) {
 			// this function below also reset the com of the reference (but not of the running frame)
 			rmsd->setReferenceAtoms( ref, align, displace );
   			double r=rmsd->calculate_DDistDRef( run, squared ,DDistDRef); 
-			cout<<"DDIST_DREF_FAST COMPONENT "<<comp<<" "<<(r-r_old)/(ref[i][comp]-ref_save[i][comp])<<" "<<DDistDRef[i][comp]<<"\n";
+			cout<<"DDIST_DREF_FAST COMPONENT "<<comp<<" "<<(r-r_old)/(ref[i][comp]-ref_save[i][comp])<<" "<<DDistDRef[i][comp]<<" "<<r<<" "<<r_old<<"\n";
 			// restore the old position
 			ref=ref_save;
 		}
@@ -207,14 +218,74 @@ int main(int argc, char* argv[]) {
 	}
   }
  
- 
- 
-  
+  // Task 7:  check weight consistency 
 
+  if(std::find(task.begin(), task.end(), 7)!=task.end()){
+	cout<<"Task 7: calculates the weight (displacement) consistency: all these should same result since the weights are normalized in input by setReferenceAtoms "<<endl;
+  	double r=rmsd->calculate( run, squared ); 
+	cout<<"STANDARD WEIGHT "<<r<<"\n"; 
 
+        std::vector<double> newalign=align;//for(std::vector<double>::iterator p=newalign.begin();p!=newalign.end();++p ){(*p)*=2.;}  
+        std::vector<double> newdisplace=displace;for(std::vector<double>::iterator p=newdisplace.begin();p!=newdisplace.end();++p ){(*p)*=2.;} 
+	rmsd->setReferenceAtoms( ref, newalign, newdisplace );
+  	r=rmsd->calculate( run, squared ); 
+	cout<<"DOUBLE WEIGHT "<<r<<"\n"; 
+
+        newalign=align;//for(std::vector<double>::iterator p=newalign.begin();p!=newalign.end();++p ){(*p)*=4.;}  
+        newdisplace=displace;for(std::vector<double>::iterator p=newdisplace.begin();p!=newdisplace.end();++p ){(*p)*=4.;} 
+	rmsd->setReferenceAtoms( ref, newalign, newdisplace );
+  	r=rmsd->calculate( run, squared ); 
+	cout<<"FOUR WEIGHT "<<r<<"\n"; 
+  }
+
+  // Task 8: do some timings to get a flavor
+  if(std::find(task.begin(), task.end(), 8)!=task.end()){
+	cout<<"Task 8: makes some timings for increasing atoms and different routines "<<endl;
+	vector<Vector> r_run,r_ref;
+	vector<double> r_al,r_disp;
+	for (unsigned int i=0;i<10;i++){r_run.push_back(run[i]);r_ref.push_back(ref[i]);r_al.push_back(align[i]);r_disp.push_back(displace[i]);}
+
+	for(unsigned int i=0;i<10;i++){
+		cout<<"NUMBER OF ATOMS : "<<r_run.size()<<endl;
+		unsigned ntest; ntest=100;
+		// test the fast routine
+	        rmsd->setReferenceAtoms( r_ref, r_al, r_disp );
+		Stopwatch sw;
+		sw.start();	
+	        for(unsigned int j=0;j<ntest;j++)rmsd->calculate( r_run, squared );
+		sw.stop();	
+		cout<<"SIMPLE ROUTINE \n"<<sw<<endl;
+
+	        std::vector<Vector> DDistDRef;
+		Stopwatch sw2;
+		sw2.start();	
+	        for(unsigned int j=0;j<ntest;j++)rmsd->calculate_DDistDRef( r_run, squared ,DDistDRef); 
+		sw2.stop();	
+		cout<<"WITH REFERENCE FRAME: \n"<<sw2<<endl;
+
+		Tensor Rotation;
+        	Matrix<std::vector<Vector> > DRotDPos(3,3);	
+		Stopwatch sw3;
+		sw3.start();	
+	        for(unsigned int j=0;j<ntest;j++)rmsd->calc_DDistDRef_Rot_DRotDPos( r_run, squared ,DDistDRef, Rotation , DRotDPos); 
+		sw3.stop();	
+		cout<<"WITH ROTATION MATRIX DERIVATIVE: \n"<<sw3<<endl;
+
+                Matrix<std::vector<Vector> > DRotDRef(3,3);
+		Stopwatch sw4;
+		sw4.start();	
+	        for(unsigned int j=0;j<ntest;j++)rmsd->calc_DDistDRef_Rot_DRotDPos_DRotDRef( r_run, squared ,DDistDRef, Rotation , DRotDPos, DRotDRef); 
+		sw4.stop();	
+		cout<<"WITH ROTATION MATRIX DERIVATIVE OF REEFERENCE: \n"<<sw4<<endl;
+		// duplicate the atoms
+		unsigned s=r_run.size();
+		for (unsigned int i=0;i<s;i++){r_run.push_back(r_run[i]);r_ref.push_back(r_ref[i]);r_al.push_back(r_al[i]);r_disp.push_back(r_disp[i]);}
+	
+	}
+
+  } 
+	
  
-  
-
 //  unsigned ntest; ntest=1000;
 //
 //  cout<<"NOW CALCULATING"<<endl;  

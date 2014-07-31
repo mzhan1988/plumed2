@@ -29,6 +29,7 @@ namespace PLMD {
 class Pbc;
 
 class SingleDomainRMSD : public ReferenceAtoms {
+  bool reset_com, normalize_weights;
 protected:
   void readReference( const PDB& pdb );
 public:
@@ -42,6 +43,11 @@ public:
   virtual double calc( const std::vector<Vector>& pos, const Pbc& pbc, const bool& squared )=0;
 /// This sets upper and lower bounds on distances to be used in DRMSD (here it does nothing)
   virtual void setBoundsOnDistances( bool dopbc, double lbound=0.0, double ubound=std::numeric_limits<double>::max( ) ){};
+  /// just few accessories not to break virtuals in setReferenceAtoms 
+  bool const getNormalizeWeights(){return normalize_weights;};
+  void const setNormalizeWeights(bool b){normalize_weights=b;};
+  bool const getResetCom(){return reset_com;};
+  void const setResetCom(bool b){reset_com=b;};
 };
 
 }

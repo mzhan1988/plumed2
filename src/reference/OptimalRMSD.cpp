@@ -175,9 +175,6 @@ double OptimalRMSD::calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vect
 }
 
 
-
-
-
 // standard RMSD calculation, just calculate
 #ifdef OLDRMSD
 template <bool safe,bool alEqDis>
@@ -639,6 +636,8 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
   double prefactor=2.0;
   if(!hasDistance)plumed_merror("getDPositionsDerivatives needs to calculate the distance via getDistance first !");
   if(!isInitialized)plumed_merror("getDPositionsDerivatives needs to initialize the coreData first!");
+  vector<Vector> ddist_tmp(n);
+  Vector csum;
   for(unsigned iat=0;iat<n;iat++){
     if(alEqDis){
 // there is no need for derivatives of rotation and shift here as it is by construction zero
@@ -649,18 +648,15 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
       derivatives[iat]= 2*displace[iat]*d[iat];
 // derivative of cpositions
       ddist_dcpositions+=-2*displace[iat]*d[iat];
+      // these needed for com corrections
+      ddist_tmp[iat]=matmul(ddist_drr01,reference[iat]-creference)*align[iat];	
+      csum+=ddist_tmp[iat];
     }
   }
 
   if(!alEqDis){
     for(unsigned iat=0;iat<n;iat++){
-// this is propagating to positions.
-// I am implicitly using the derivative of rr01 wrt positions here
-      derivatives[iat]+=matmul(ddist_drr01,reference[iat]-creference)*align[iat];  
-      // these derivatives below are not needed: if coms change the rotation matrices and the distance do not change!
-      //for(unsigned jat=0;jat<n;jat++){
-      //        derivatives[iat]+=-matmul(ddist_drr01,reference[jat]-creference)*align[iat]*align[jat];
-      //}
+      derivatives[iat]+=ddist_tmp[iat]-csum*align[iat];
       derivatives[iat]+=ddist_dcpositions*align[iat];
     }
   }
@@ -679,6 +675,8 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
   Vector ddist_dcreference;
   derivatives.resize(n);
   double prefactor=2.0;
+  vector<Vector> ddist_tmp(n);
+  Vector csum;
   if(!hasDistance)plumed_merror("getDDistanceDReference needs to calculate the distance via getDistance first !");
   if(!isInitialized)plumed_merror("getDDistanceDReference to initialize the coreData first!");
   // get the transpose rotation
@@ -697,14 +695,16 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
       derivatives[iat]= -2*displace[iat]*matmul(t_rotation,d[iat]);
 // derivative of cpositions
       ddist_dcreference+=2*displace[iat]*matmul(t_rotation,d[iat]);
+      // these below are needed for com correction
+      ddist_tmp[iat]=matmul(t_ddist_drr01,positions[iat]-cpositions)*align[iat];
+      csum+=ddist_tmp[iat]; 
     }
   }
 
   if(!alEqDis){
     for(unsigned iat=0;iat<n;iat++){
-      derivatives[iat]+=matmul(t_ddist_drr01,positions[iat]-cpositions)*align[iat];  
-      // the derivatives respect to com are not needed: if coms change (independently from positions) the rotation matrices and the distance do not change!
       derivatives[iat]+=ddist_dcreference*align[iat];
+      derivatives[iat]+=ddist_tmp[iat]-csum*align[iat]; 	 
     }
   }
   if(!distanceIsSquared){
