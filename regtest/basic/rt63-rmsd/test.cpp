@@ -20,15 +20,38 @@ int main(int argc, char* argv[]) {
 
   // findiff step: eps
   double eps=1.e-6;
-  bool squared=true;
 
   // default task, calculate the RMSD of one frame respect to a set of others 
   vector<int> task(1);task[0]=0;
   // first parse the task
   for(int i = 1; i < argc; i++){ 
       task.push_back(atoi(argv[i]));
-      cout << "argv[" << i << "] = " << task[-1] << endl; 
   }  
+  if(argc==1){
+	cout<<"ARGUMENTS: \n";
+        cout<<" -1 : squared=true (default false)\n";  
+	cout<<" -2 : normalize_weights=false (default true)\n";
+	cout<<" -3 : reset_com=false (default true) \n";
+	cout<<"  0 : normal rmsd/msd calculation  (default: always done)\n";
+	cout<<"  1 : findiff test for  d msd / d position  (inhomogenehous weights)\n";
+	cout<<"  2 : findiff test for  d msd / d reference (inhomogenehous weights)\n";
+	cout<<"  3 : findiff test for  d msd / d position  (homogenehous weights)\n";
+	cout<<"  4 : findiff test for  d msd / d reference (homogenehous weights)\n";
+	cout<<"  5 : findiff test for  d Rot / d position  (inhomogenehous weights) \n";
+	cout<<"  6 : findiff test for  d Rot / d reference  (inhomogenehous weights) \n";
+	cout<<"  7 : consistency check for MSD proportionality (works with squared=true through option -1 )\n";
+	cout<<"  8 : do some timings for all the above routines and for a growing number of atoms\n";
+	//return 0 ;
+  }
+
+
+  bool reset_com=true;
+  bool normalize_weights=true;
+  bool squared=false;
+
+  if(std::find(task.begin(), task.end(), -1)!=task.end()){cout<<"squared=true (default false)"<<endl;squared=true;}
+  if(std::find(task.begin(), task.end(), -2)!=task.end()){cout<<"normalize_weights=false (default true)"<<endl;normalize_weights=false;}
+  if(std::find(task.begin(), task.end(), -3)!=task.end()){cout<<"reset_com=false (default true)"<<endl; reset_com=false;}
 
   PDB pdbref; 
 
@@ -77,8 +100,8 @@ int main(int argc, char* argv[]) {
 
   // reset some stuff
 
-  rmsd->setResetCom(false);
-  rmsd->setNormalizeWeights(false);
+  rmsd->setResetCom(reset_com);
+  rmsd->setNormalizeWeights(normalize_weights);
   rmsd->setReferenceAtoms( ref, align, displace );
 
 
@@ -221,7 +244,7 @@ int main(int argc, char* argv[]) {
   // Task 7:  check weight consistency 
 
   if(std::find(task.begin(), task.end(), 7)!=task.end()){
-	cout<<"Task 7: calculates the weight (displacement) consistency: all these should same result since the weights are normalized in input by setReferenceAtoms "<<endl;
+	cout<<"Task 7: calculates the weight (displacement) consistency: all these should same result when weights are normalized in input by setReferenceAtoms otherwise they should be proportional when squared=true "<<endl;
   	double r=rmsd->calculate( run, squared ); 
 	cout<<"STANDARD WEIGHT "<<r<<"\n"; 
 
