@@ -12,6 +12,9 @@
 #include "plumed/tools/Vector.h"
 #include "plumed/tools/Matrix.h"
 #include <vector>
+#include <fstream>
+#include "plumed/tools/AtomNumber.h"
+
 
 using namespace std ;
 using namespace PLMD;
@@ -41,6 +44,7 @@ int main(int argc, char* argv[]) {
 	cout<<"  6 : findiff test for  d Rot / d reference  (inhomogenehous weights) \n";
 	cout<<"  7 : consistency check for MSD proportionality (works with squared=true through option -1 )\n";
 	cout<<"  8 : do some timings for all the above routines and for a growing number of atoms\n";
+	cout<<"  9 : test the rotation order: print position.pdb reference.pdb aligned.pdb and check that it makes sense\n";
 	//return 0 ;
   }
 
@@ -59,12 +63,12 @@ int main(int argc, char* argv[]) {
   PLMD::RMSDBase* rmsd;
   string type; type.assign("OPTIMAL");
 
-  string reference; reference.assign("1GB1_mdl1.pdb");
+  string reference; reference.assign("1GB1_mdl1_rototranslated.pdb");
   PDB pdb;
 
   // mimick gromacs: do it in nm
   if( !pdb.read(reference,false,0.1) ) 
-        cout<<"missing input file 1GB1_mdl1.pdb "<<"\n";
+        cout<<"missing input file 1GB1_mdl1_rototranslated.pdb "<<"\n";
  
   cout<<"NOW CREATING THE RMSD OBJECT...";  
 
@@ -307,89 +311,72 @@ int main(int argc, char* argv[]) {
 	}
 
   } 
+
+  // Task 9: check the rotation
+  if(std::find(task.begin(), task.end(), 9)!=task.end()){
+	// dump the reference
+	ofstream myfile;
+	myfile.open ("reference.pdb");		
+	std::vector<AtomNumber> at=pdb.getAtomNumbers();
+	std::vector<Vector>   pos=pdb.getPositions();
+	unsigned k=0;
+	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
+		myfile<<"ATOM";
+                myfile.width(7);myfile<<std::right<<(*i).serial()<<" "; 
+                myfile.width(4);myfile<<std::left<<pdb.getAtomName(*i); 
+                myfile.width(4);myfile<<std::right<<pdb.getResidueName(*i)<<" A"; 
+                myfile.width(4);myfile<<std::right<<pdb.getResidueNumber(*i)<<"    "; 
+		myfile.setf( std::ios::fixed, std:: ios::floatfield );
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<pos[k][0]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<pos[k][1]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<pos[k][2]*10<<"  1.00  1.00\n"; 
+		k++;	
+	}	
+	myfile.close();			
+	// dump the position
+	myfile.open ("position.pdb");		
+	at=pdbrun.getAtomNumbers();
+	std::vector<Vector>   runpos=pdbrun.getPositions();
+	k=0;
+	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
+		myfile<<"ATOM";
+                myfile.width(7);myfile<<std::right<<(*i).serial()<<" "; 
+                myfile.width(4);myfile<<std::left<<pdbrun.getAtomName(*i); 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueName(*i)<<" A"; 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueNumber(*i)<<"    "; 
+		myfile.setf( std::ios::fixed, std:: ios::floatfield );
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<runpos[k][0]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<runpos[k][1]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<runpos[k][2]*10<<"  1.00  1.00\n"; 
+		k++;	
+	}	
+	myfile.close();			
+	// now do the alignment
+	Tensor Rotation;
+	Matrix<std::vector<Vector> > DRotDPos(3,3);
+        std::vector<Vector> DDistDRef;
+	std::vector<Vector>   alignedpos;
+	std::vector<Vector>   centeredpos;
+	rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos ); 
+	myfile.open ("aligned.pdb");		
+	k=0;
+	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
+		myfile<<"ATOM";
+                myfile.width(7);myfile<<std::right<<(*i).serial()<<" "; 
+                myfile.width(4);myfile<<std::left<<pdbrun.getAtomName(*i); 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueName(*i)<<" A"; 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueNumber(*i)<<"    "; 
+		myfile.setf( std::ios::fixed, std:: ios::floatfield );
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<alignedpos[k][0]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<alignedpos[k][1]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<alignedpos[k][2]*10<<"  1.00  1.00\n"; 
+		k++;	
+	}	
+	myfile.close();			
 	
- 
-//  unsigned ntest; ntest=1000;
-//
-//  cout<<"NOW CALCULATING"<<endl;  
-//  double r=rmsd->calculate( run, squared ); 
-//  cout<<"DONE!"<<endl;
-//
-//  cout<<"RMSD IS "<<r<<"\n"; 
-//  
-//  Stopwatch sw;
-//  sw.start();
-//  for (unsigned i=0;i<ntest;i++)rmsd->calculate(run,squared);
-//  sw.stop();
-//  cout<<sw;
-//
-//	
-//  if( !pdbref.read("1GB1_mdl1.pdb",false,0.1) )
-//        log<<"missing input file 1GB1_mdl1.pdb\n" ;
-//
-//  // get some data
-//  // this get the position as reference, occupancy for alignment and beta as for displacement weight
-//  rmsd.set(pdbref,"OPTIMAL-FAST"); 
-//
-//  // alternatives are :
-//  //std::vector<Vector> ref ;  ref=pdbref.getPositions() ;
-//  //std::vector<double> occ; occ=pdbref.getOccupancy();
-//  //std::vector<double> b ;  b=pdbref.getBeta();
-//
-//  PDB pdbrun; 
-//  if( !pdbrun.read("1GB1_mdl2.pdb",false,0.1) )
-//        log<<"missing input file 1GB1_mdl2.pdb\n" ;
-//
-//  std::vector<Vector> run ;  run=pdbrun.getPositions() ;
-//
-//  //rmsd.findiffOptimalAlignment(run,true);
-//  //
-//  log<<ntest<<" times the old version \n";
-//  Stopwatch sw;
-//  sw.start();
-//  std::vector<Vector> derivatives; 
-//  for (unsigned i=0;i<ntest;i++)rmsd.calculate(run,derivatives,squared);
-//  sw.stop();
-//  log<<sw;
-//
-//  Stopwatch sw2;
-//  log<<ntest<<" times using CoreCalc   \n";
-//  sw2.start();
-//  double dist;
-//  for (unsigned i=0;i<ntest;i++)dist=rmsd.CC_CalcDistGetDDistDPosition(run,derivatives,squared);
-//  log<<"DIST IS "<<dist<<"\n";
-//  sw2.stop();
-//  log<<sw2;
-//
-//  Stopwatch sw3;
-//  log<<ntest<<" times using CoreCalc : now calculating both reference and position derivatives at the same time \n";
-//  sw3.start();
-//  std::vector<Vector> derivatives_ref; 
-//  for (unsigned i=0;i<ntest;i++)dist=rmsd.CC_CalcDistGetDDistDReferenceAndDDistDPositions(run,derivatives_ref,derivatives,squared);
-//  log<<"DIST IS "<<dist<<"\n";
-//  sw3.stop();
-//  log<<sw3;
-//
-//
-//  Stopwatch sw4;
-//  log<<ntest<<" times using CoreCalc : now calculating both reference and position derivatives at the same time and derivarive of the rotation matrix \n";
-//  sw4.start();
-//  Tensor rotation;
-//  std::vector< std::vector < std::vector <Vector> >  > drotdref;
-//  std::vector< std::vector < std::vector <Vector> >  > drotdpos;
-//  for (unsigned i=0;i<ntest;i++)dist=rmsd.CC_CalcDistGetRotationAndDDistDReferenceAndDDistDPositionsAndDRotationDReferenceAndDRotationDPositions(run,rotation,derivatives_ref,derivatives,drotdref,drotdpos,squared);
-//  log<<"DIST IS "<<dist<<"\n";
-//  sw4.stop();
-//  log<<sw4;
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
+
+	// dump the aligned	
+  }
+	
   return 0;
 }

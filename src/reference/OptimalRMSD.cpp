@@ -75,6 +75,8 @@ class RMSDCoreData
 		std::vector<Vector> getDDistanceDReference();
 		// get aligned positions
                 std::vector<Vector> getAlignedPositions();	
+		// get centered positions
+                std::vector<Vector> getCenteredPositions();	
 		// get rotation matrix
 		Tensor getRotationMatrix();
 		// get the derivative of the rotation matrix respect to positions
@@ -93,6 +95,7 @@ public:
   double calc_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef); 
   double calc_DDistDRef_Rot_DRotDPos( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos); 
   double calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos,Matrix<std::vector<Vector> > & DRotDRef ); 
+  double calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>  & alignedpositions, std::vector<Vector> & centeredpositions); 
 
   template <bool safe,bool alEqDis>
   double optimalAlignment(const  std::vector<double>  & align,
@@ -118,6 +121,15 @@ public:
                           const std::vector<Vector> & positions,std::vector<Vector> & DDistDRef, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, Matrix<std::vector<Vector> > & DRotDRef,
                           bool squared=false);
 
+  template <bool safe,bool alEqDis>
+  double optimalAlignment_PCA(const  std::vector<double>  & align,
+                              const  std::vector<double>  & displace,
+                              const std::vector<Vector> & positions,
+                              std::vector<Vector> & alignedpositions,
+                              std::vector<Vector> & centeredpositions, 
+			      Tensor & Rotation, 
+			      Matrix<std::vector<Vector> > & DRotDPos,
+                              bool squared=false);
 
 };
 
@@ -173,6 +185,17 @@ double OptimalRMSD::calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vect
      return optimalAlignment_DDistDRef_Rot_DRotDPos_DRotDRef<true,false>(getAlign(),getDisplace(),pos,DDistDRef,Rotation,DRotDPos,DRotDRef,squared);
   }
 }
+
+double OptimalRMSD::calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions){
+  if( fast ){
+     if( getAlign()==getDisplace() ) return optimalAlignment_PCA<false,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,Rotation,DRotDPos,squared); 
+     return optimalAlignment_PCA<false,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,Rotation,DRotDPos,squared);
+  } else {
+     if( getAlign()==getDisplace() ) return optimalAlignment_PCA<true,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,Rotation,DRotDPos,squared);
+     return optimalAlignment_PCA<true,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,Rotation,DRotDPos,squared);
+  }
+}
+
 
 
 // standard RMSD calculation, just calculate
@@ -444,6 +467,33 @@ double OptimalRMSD::optimalAlignment_DDistDRef_Rot_DRotDPos_DRotDRef(const  std:
    // get its derivative
    DRotDPos=cd.getDRotationDPosition();  
    DRotDRef=cd.getDRotationDReference();  
+   return dist;    
+}
+
+
+template <bool safe,bool alEqDis>
+double OptimalRMSD::optimalAlignment_PCA(const  std::vector<double>  & align,
+                              const  std::vector<double>  & displace,
+                              const std::vector<Vector> & positions,
+                              std::vector<Vector> & alignedpositions,
+                              std::vector<Vector> & centeredpositions, 
+			      Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos,
+                              bool squared){
+   //initialize the data into the structure
+   RMSDCoreData cd(align,displace,positions,getReferencePositions()); 
+   // Perform the diagonalization and all the needed stuff
+   cd.doCoreCalc(safe,alEqDis); 
+   // make the core calc distance
+   double dist=cd.getDistance(squared); 
+   // get the rotation matrix
+   Rotation=cd.getRotationMatrix(); 
+   // get its derivative
+   DRotDPos=cd.getDRotationDPosition();  
+   // get aligned positions 
+   alignedpositions=cd.getAlignedPositions();
+   // get centered positions
+   centeredpositions=cd.getAlignedPositions();
+
    return dist;    
 }
 
@@ -724,6 +774,7 @@ Matrix<std::vector<Vector> >  RMSDCoreData::getDRotationDPosition( ){
   //           (3x3 rot) (3x3 components of rr01)    
   std::vector<Vector> v(n);
   Vector csum;
+  // these below could probably be calculated in the main routine
   for(unsigned iat=0;iat<n;iat++) csum+=(reference[iat]-creference)*align[iat];
   for(unsigned iat=0;iat<n;iat++) v[iat]=(reference[iat]-creference-csum)*align[iat];
   for(unsigned a=0;a<3;a++){
@@ -745,6 +796,7 @@ Matrix<std::vector<Vector> >  RMSDCoreData::getDRotationDReference( ){
   //           (3x3 rot) (3x3 components of rr01)    
   std::vector<Vector> v(n);
   Vector csum;
+  // these below could probably be calculated in the main routine
   for(unsigned iat=0;iat<n;iat++) csum+=(positions[iat]-cpositions)*align[iat];
   for(unsigned iat=0;iat<n;iat++) v[iat]=(positions[iat]-cpositions-csum)*align[iat];
  
@@ -770,6 +822,19 @@ std::vector<Vector> RMSDCoreData::getAlignedPositions(){
 	  for(unsigned iat=0;iat<n;iat++)alignedpos[iat]=-d[iat]+positions[iat]-cpositions;
 	  return alignedpos; 
 }
+
+
+std::vector<Vector> RMSDCoreData::getCenteredPositions(){
+	  std::vector<Vector> centeredpos;
+	  const unsigned n=static_cast<unsigned int>(reference.size());
+	  centeredpos.resize(n);
+	  if(!isInitialized)plumed_merror("getCenteredPositions needs to initialize the coreData first!");
+          // avoid to calculate matrix element but use the sum of what you have		  
+	  for(unsigned iat=0;iat<n;iat++)centeredpos[iat]=positions[iat]-cpositions;
+	  return centeredpos; 
+}
+
+
 
 Tensor RMSDCoreData::getRotationMatrix(){
 	  if(!isInitialized)plumed_merror("getRotationMatrx needs to initialize the coreData first!");

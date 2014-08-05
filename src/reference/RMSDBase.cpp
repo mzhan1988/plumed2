@@ -53,12 +53,13 @@ double RMSDBase::calc_DDistDRef_Rot_DRotDPos_DRotDRef(const std::vector<Vector>&
   return 0.;
 }
 
-
-
 // this is here just not to make fail the others: just in case they are not
 double RMSDBase::calculate_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef){
   return calc_DDistDRef( pos, squared , DDistDRef);
 }
 
-
+double RMSDBase::calc_PCA(const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions ){ 
+  plumed_merror("You need to define calc_PCA for this metrics if you want to use it ");
+  return 0.;
+}
 }
