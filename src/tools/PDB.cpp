@@ -84,6 +84,7 @@ unsigned PDB::size()const{
 bool PDB::readFromFilepointer(FILE *fp,bool naturalUnits,double scale){
   //cerr<<file<<endl;
   bool file_is_alive=false;
+  bool file_is_already_ended=false;
   if(naturalUnits) scale=1.0;
   string line;
   fpos_t pos;
@@ -103,7 +104,7 @@ bool PDB::readFromFilepointer(FILE *fp,bool naturalUnits,double scale){
     string occ=line.substr(54,6);
     string bet=line.substr(60,6);
     Tools::trim(record);
-    if(record=="TER"){ block_ends.push_back( positions.size() ); }
+    if(record=="TER"){ block_ends.push_back( positions.size() ); file_is_already_ended=true; }
     if(record=="END"){ file_is_alive=true;  break;}
     if(record=="ENDMDL"){ file_is_alive=true;  break;}
     if(record=="REMARK"){
@@ -111,6 +112,7 @@ bool PDB::readFromFilepointer(FILE *fp,bool naturalUnits,double scale){
          remark.insert(remark.begin(),v1.begin(),v1.end()); 
     }
     if(record=="ATOM" || record=="HETATM"){
+      file_is_already_ended=false;
       AtomNumber a; unsigned resno;
       double o,b;
       Vector p;
@@ -136,7 +138,7 @@ bool PDB::readFromFilepointer(FILE *fp,bool naturalUnits,double scale){
       residuenames.push_back(residuename);
     }
   }
-  block_ends.push_back( positions.size() );
+  if(!file_is_already_ended)block_ends.push_back( positions.size() );
   return file_is_alive;
 }
 
