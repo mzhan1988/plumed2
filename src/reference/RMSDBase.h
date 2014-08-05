@@ -40,6 +40,7 @@ public:
   virtual double calc_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef);
   virtual double calc_DDistDRef_Rot_DRotDPos( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef,Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos);
   virtual double calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef,Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, Matrix<std::vector<Vector> > & DRotDRef);
+  virtual double calc_PCA(const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions ) ;
   virtual double calc( const std::vector<Vector>& pos, const bool& squared )=0;
 };
 
