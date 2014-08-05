@@ -40,11 +40,13 @@ int main(int argc, char* argv[]) {
 	cout<<"  2 : findiff test for  d msd / d reference (inhomogenehous weights)\n";
 	cout<<"  3 : findiff test for  d msd / d position  (homogenehous weights)\n";
 	cout<<"  4 : findiff test for  d msd / d reference (homogenehous weights)\n";
-	cout<<"  5 : findiff test for  d Rot / d position  (inhomogenehous weights) \n";
-	cout<<"  6 : findiff test for  d Rot / d reference  (inhomogenehous weights) \n";
+	cout<<"  5 : findiff test for  d Rot / d position  (inhomogenehous weights)  (reference->position)\n";
+	cout<<"  6 : findiff test for  d Rot / d reference  (inhomogenehous weights) (reference->position)\n";
 	cout<<"  7 : consistency check for MSD proportionality (works with squared=true through option -1 )\n";
 	cout<<"  8 : do some timings for all the above routines and for a growing number of atoms\n";
-	cout<<"  9 : test the rotation order: print position.pdb reference.pdb aligned.pdb and check that it makes sense\n";
+	cout<<"  9 : test the rotation order: print position.pdb reference.pdb aligned.pdb and check that it makes sense(should be reference aligned onto positions)\n";
+	cout<<" 10 : findiff test for  d Rot / d position  ( position -> reference ) \n";
+
 	//return 0 ;
   }
 
@@ -355,9 +357,10 @@ int main(int argc, char* argv[]) {
 	Tensor Rotation;
 	Matrix<std::vector<Vector> > DRotDPos(3,3);
         std::vector<Vector> DDistDRef;
-	std::vector<Vector>   alignedpos;
-	std::vector<Vector>   centeredpos;
-	rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos ); 
+	std::vector<Vector> alignedpos;
+	std::vector<Vector> centeredpos;
+	std::vector<Vector> centeredref;
+	rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
 	myfile.open ("aligned.pdb");		
 	k=0;
 	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
@@ -373,9 +376,48 @@ int main(int argc, char* argv[]) {
 		k++;	
 	}	
 	myfile.close();			
-	
-
 	// dump the aligned	
+	myfile.open ("reference_centered.pdb");		
+	k=0;
+	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
+		myfile<<"ATOM";
+                myfile.width(7);myfile<<std::right<<(*i).serial()<<" "; 
+                myfile.width(4);myfile<<std::left<<pdbrun.getAtomName(*i); 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueName(*i)<<" A"; 
+                myfile.width(4);myfile<<std::right<<pdbrun.getResidueNumber(*i)<<"    "; 
+		myfile.setf( std::ios::fixed, std:: ios::floatfield );
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<centeredref[k][0]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<centeredref[k][1]*10; 
+                myfile.width(8);myfile.precision(3); myfile<<std::right<<centeredref[k][2]*10<<"  1.00  1.00\n"; 
+		k++;	
+	}	
+	myfile.close();			
+  }
+  // Task 10: derivative of the rotation matrix (in case of reverse transition) 
+  if(std::find(task.begin(), task.end(), 10)!=task.end()){
+	cout<<"Task 5: calculates the finite difference for derivative of the rotation matrix respect to the the running frame"<<endl;
+	Tensor Rotation,OldRotation;
+	Matrix<std::vector<Vector> > DRotDPos(3,3);
+        std::vector<Vector> DDistDRef;
+        std::vector<Vector> alignedpos;
+        std::vector<Vector> centeredpos;
+        std::vector<Vector> centeredref;
+	rmsd->calc_PCA( run, squared, OldRotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
+	std::vector<Vector> run_save=run;	
+	for(unsigned int a=0;a<3;a++){	
+		for(unsigned int b=0;b<3;b++){	
+			for(unsigned int comp=0;comp<3;comp++){	
+				for(unsigned int i=0;i<run.size();++i){
+					//change the position		
+					run[i][comp]+=eps;
+					rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
+					cout<<"DROT_DPOS_INVERSE_TRANSFORM COMPONENT "<<comp<<" "<<(Rotation[a][b]-OldRotation[a][b])/(run[i][comp]-run_save[i][comp])<<" "<<DRotDPos[a][b][i][comp]<<"\n";
+					// restore the old position
+					run=run_save;
+				}
+			}
+		}
+	}
   }
 	
   return 0;
