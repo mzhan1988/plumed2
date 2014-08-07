@@ -39,7 +39,7 @@ class PCARMSD : public Colvar {
   bool squared; 
   std::vector< std::vector<Vector> > eigenvectors;
   std::vector<PDB> pdbv;
-
+  std::vector<string> pca_names;
 public:
   PCARMSD(const ActionOptions&);
   ~PCARMSD();
@@ -72,13 +72,13 @@ void PCARMSD::registerKeywords(Keywords& keys){
   keys.add("compulsory","AVERAGE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   keys.add("compulsory","EIGENVECTORS","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   useCustomisableComponents(keys);
-  keys.addOutputComponent("err","COMPONENTS","the error component ");
+  //keys.addOutputComponent("err","COMPONENTS","the error component ");
   //keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
   //keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
 }
 
 PCARMSD::PCARMSD(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao),squared(false)
+PLUMED_COLVAR_INIT(ao),squared(true)
 {
   string f_average;
   parse("AVERAGE",f_average);
@@ -86,16 +86,14 @@ PLUMED_COLVAR_INIT(ao),squared(false)
   type.assign("OPTIMAL");
   string f_eigenvectors;
   parse("EIGENVECTORS",f_eigenvectors);
- 
-
   checkRead();
 
-  addValueWithDerivatives(); setNotPeriodic();
   PDB pdb;
 
   // read everything in ang and transform to nm if we are not in natural units
   if( !pdb.read(f_average,plumed.getAtoms().usingNaturalUnits(),0.1/atoms.getUnits().getLength()) )
       error("missing input file " + f_average );
+
 
   rmsd = metricRegister().create<RMSDBase>(type,pdb);
   // here align and displace are a simple vector of ones
@@ -109,7 +107,7 @@ PLUMED_COLVAR_INIT(ao),squared(false)
   rmsd->setNumberOfAtoms( atomsn.size() );
   requestAtoms( atomsn );
 
-  addComponentWithDerivatives("err"); componentIsNotPeriodic("err"); 
+  //addComponent("err"); componentIsNotPeriodic("err"); 
 
   log.printf("  average from file %s\n",f_average.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
@@ -149,8 +147,10 @@ PLUMED_COLVAR_INIT(ao),squared(false)
   // the components 
   for(unsigned i=0;i<neigenvects;i++){
         string name; name=string("pca-")+std::to_string(i);
+	pca_names.push_back(name);
 	addComponentWithDerivatives(name.c_str()); componentIsNotPeriodic(name.c_str());	
   }  
+  turnOnDerivatives();
 
 }
 
@@ -161,20 +161,52 @@ PCARMSD::~PCARMSD(){
 
 // calculator
 void PCARMSD::calculate(){
-        Tensor Rotation,OldRotation;
-        Matrix<std::vector<Vector> > DRotDPos(3,3);
+        Tensor rotation,invrotation;
+        Matrix<std::vector<Vector> > drotdpos(3,3);
         std::vector<Vector> DDistDRef;
         std::vector<Vector> alignedpos;
         std::vector<Vector> centeredpos;
         std::vector<Vector> centeredref;
-        double r=rmsd->calc_PCA( getPositions(), squared, OldRotation , DRotDPos , alignedpos ,centeredpos, centeredref );
+        double r=rmsd->calc_PCA( getPositions(), squared, rotation , drotdpos , alignedpos ,centeredpos, centeredref );
+	invrotation=rotation.transpose();
+	
+//	getPntrToComponent("err")->set(r); < can set only when got the derivative (isn't is stupid that one can have value with only derivative or without???)
+	for(unsigned i=0;i<eigenvectors.size();i++){
+      	 	string name; name=pca_names[i];
+		Value* value=getPntrToComponent(name.c_str());
+		double val;val=0.;
+		for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
+			//pca value
+			val+=dotProduct(alignedpos[iat]-centeredref[iat],eigenvectors[i][iat]);	
+		}
+		value->set(val);
+		// here the loop is reversed to better suit the structure of the derivative of the rotation matrix
+		std::vector< Vector > der;
+		der.resize(getNumberOfAtoms());
+		double tmp1;
+		for(unsigned a=0;a<3;a++){
+			for(unsigned b=0;b<3;b++){
+				for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
+					tmp1=0.;
+					for(unsigned n=0;n<getNumberOfAtoms();n++){
+						tmp1+=alignedpos[n][b]*eigenvectors[i][n][a];
+					}
+					der[iat]+=drotdpos[a][b][iat]*tmp1;	
+				}
+			}
+		}
+		Vector v1;
+		for(unsigned n=0;n<getNumberOfAtoms();n++){
+				v1+=(1./getNumberOfAtoms())*matmul(invrotation,eigenvectors[i][n]);	
+		}	
+		for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
+			der[iat]+=matmul(invrotation,eigenvectors[i][iat])-v1;	
+		        setAtomsDerivatives (value,iat,der[iat]);
+		}		
+ 	 }
 
-//
-//  setValue(r); 
-//  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, rmsd->getAtomDerivative(i) );
-//
-//  Tensor virial; plumed_dbg_assert( !rmsd->getVirial(virial) );
 //  setBoxDerivativesNoPbc();
+
 }
 
 }

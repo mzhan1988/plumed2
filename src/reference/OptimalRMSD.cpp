@@ -199,13 +199,13 @@ double OptimalRMSD::calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vect
 }
 
 double OptimalRMSD::calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions, std::vector<Vector>  & centeredreference){
-  if( fast ){
+//  if( fast ){
      //if( getAlign()==getDisplace() ) return optimalAlignment_PCA<false,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,centeredreference,Rotation,DRotDPos,squared); 
-     return optimalAlignment_PCA<false,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,DRotDPos,squared);
-  } else {
+//     return optimalAlignment_PCA<false,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,DRotDPos,squared);
+//  } else {
      //if( getAlign()==getDisplace() ) return optimalAlignment_PCA<true,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,centeredreference,Rotation,DRotDPos,squared);
      return optimalAlignment_PCA<true,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,DRotDPos,squared);
-  }
+///  }
 }
 
 
