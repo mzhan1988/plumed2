@@ -58,7 +58,7 @@ double RMSDBase::calculate_DDistDRef( const std::vector<Vector>& pos, const bool
   return calc_DDistDRef( pos, squared , DDistDRef);
 }
 
-double RMSDBase::calc_PCA(const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions , std::vector<Vector>  & centeredreference ){ 
+double RMSDBase::calc_PCA(const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, std::vector<Vector> & ddistdpos ,Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions , std::vector<Vector>  & centeredreference ){ 
   plumed_merror("You need to define calc_PCA for this metrics if you want to use it ");
   return 0.;
 }

@@ -106,7 +106,7 @@ public:
   double calc_DDistDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef); 
   double calc_DDistDRef_Rot_DRotDPos( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos); 
   double calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vector>& pos, const bool& squared , std::vector<Vector>& DDistDRef, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos,Matrix<std::vector<Vector> > & DRotDRef ); 
-  double calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>  & alignedpositions, std::vector<Vector> & centeredpositions, std::vector<Vector> &centeredreference); 
+  double calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, std::vector<Vector>  & ddistdpos , Matrix<std::vector<Vector> > & DRotDPos,std::vector<Vector>  & alignedpositions, std::vector<Vector> & centeredpositions, std::vector<Vector> &centeredreference); 
 
   template <bool safe,bool alEqDis>
   double optimalAlignment(const  std::vector<double>  & align,
@@ -140,6 +140,7 @@ public:
                               std::vector<Vector> & centeredpositions, 
                               std::vector<Vector> & centeredreference, 
 			      Tensor & Rotation, 
+                              std::vector<Vector> & ddistdpos, 
 			      Matrix<std::vector<Vector> > & DRotDPos,
                               bool squared=false);
 
@@ -198,13 +199,13 @@ double OptimalRMSD::calc_DDistDRef_Rot_DRotDPos_DRotDRef( const std::vector<Vect
   }
 }
 
-double OptimalRMSD::calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions, std::vector<Vector>  & centeredreference){
+double OptimalRMSD::calc_PCA( const std::vector<Vector>& pos, const bool& squared , Tensor & Rotation, std::vector<Vector>   & ddistdpos ,Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector>   & alignedpositions, std::vector<Vector>  & centeredpositions, std::vector<Vector>  & centeredreference){
 //  if( fast ){
      //if( getAlign()==getDisplace() ) return optimalAlignment_PCA<false,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,centeredreference,Rotation,DRotDPos,squared); 
 //     return optimalAlignment_PCA<false,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,DRotDPos,squared);
 //  } else {
      //if( getAlign()==getDisplace() ) return optimalAlignment_PCA<true,true>(getAlign(),getDisplace(),pos,alignedpositions,centeredpositions,centeredreference,Rotation,DRotDPos,squared);
-     return optimalAlignment_PCA<true,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,DRotDPos,squared);
+     return optimalAlignment_PCA<true,false>(getAlign(),getDisplace(),pos,alignedpositions, centeredpositions,centeredreference,Rotation,ddistdpos,DRotDPos,squared);
 ///  }
 }
 
@@ -495,7 +496,9 @@ double OptimalRMSD::optimalAlignment_PCA(const  std::vector<double>  & align,
                               std::vector<Vector> & alignedpositions,
                               std::vector<Vector> & centeredpositions, 
                               std::vector<Vector> & centeredreference, 
-			      Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos,
+			      Tensor & Rotation, 
+                              std::vector<Vector> & ddistdpos,
+			      Matrix<std::vector<Vector> > & DRotDPos,
                               bool squared){
    //initialize the data into the structure
    RMSDCoreData cd(align,displace,positions,getReferencePositions()); 
@@ -503,6 +506,8 @@ double OptimalRMSD::optimalAlignment_PCA(const  std::vector<double>  & align,
    cd.doCoreCalc(safe,alEqDis); 
    // make the core calc distance
    double dist=cd.getDistance(squared); 
+   // make the derivatives by using pieces calculated in coreCalc (probably the best is just to copy the vector...)
+   ddistdpos=cd.getDDistanceDPositions(); 	
    // get the rotation matrix
    Rotation=cd.getRotationMatrixPositionsToReference(); 
    // get its derivative

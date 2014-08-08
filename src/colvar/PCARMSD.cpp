@@ -72,7 +72,7 @@ void PCARMSD::registerKeywords(Keywords& keys){
   keys.add("compulsory","AVERAGE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   keys.add("compulsory","EIGENVECTORS","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   useCustomisableComponents(keys);
-  //keys.addOutputComponent("err","COMPONENTS","the error component ");
+  keys.addOutputComponent("err","COMPONENTS","the error component ");
   //keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
   //keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
 }
@@ -107,7 +107,7 @@ PLUMED_COLVAR_INIT(ao),squared(true)
   rmsd->setNumberOfAtoms( atomsn.size() );
   requestAtoms( atomsn );
 
-  //addComponent("err"); componentIsNotPeriodic("err"); 
+  addComponentWithDerivatives("err"); componentIsNotPeriodic("err"); 
 
   log.printf("  average from file %s\n",f_average.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
@@ -167,29 +167,35 @@ void PCARMSD::calculate(){
         std::vector<Vector> alignedpos;
         std::vector<Vector> centeredpos;
         std::vector<Vector> centeredref;
-        double r=rmsd->calc_PCA( getPositions(), squared, rotation , drotdpos , alignedpos ,centeredpos, centeredref );
+        std::vector<Vector> ddistdpos;
+        double r=rmsd->calc_PCA( getPositions(), squared, rotation , ddistdpos, drotdpos , alignedpos ,centeredpos, centeredref );
 	invrotation=rotation.transpose();
 	
-//	getPntrToComponent("err")->set(r); < can set only when got the derivative (isn't is stupid that one can have value with only derivative or without???)
+	Value* verr=getPntrToComponent("err");
+	verr->set(r);
+	for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
+		        setAtomsDerivatives (verr,iat,ddistdpos[iat]);
+	}
+
+	std::vector< Vector > der;
+	der.resize(getNumberOfAtoms());
+
 	for(unsigned i=0;i<eigenvectors.size();i++){
-      	 	string name; name=pca_names[i];
-		Value* value=getPntrToComponent(name.c_str());
+		Value* value=getPntrToComponent(pca_names[i].c_str());
 		double val;val=0.;
 		for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
-			//pca value
 			val+=dotProduct(alignedpos[iat]-centeredref[iat],eigenvectors[i][iat]);	
 		}
 		value->set(val);
 		// here the loop is reversed to better suit the structure of the derivative of the rotation matrix
-		std::vector< Vector > der;
-		der.resize(getNumberOfAtoms());
 		double tmp1;
+		der.clear();
 		for(unsigned a=0;a<3;a++){
 			for(unsigned b=0;b<3;b++){
 				for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
 					tmp1=0.;
 					for(unsigned n=0;n<getNumberOfAtoms();n++){
-						tmp1+=alignedpos[n][b]*eigenvectors[i][n][a];
+						tmp1+=centeredpos[n][b]*eigenvectors[i][n][a];
 					}
 					der[iat]+=drotdpos[a][b][iat]*tmp1;	
 				}

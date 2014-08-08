@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include "plumed/tools/Exception.h"
 #include "plumed/tools/RMSD.h"
@@ -35,7 +36,7 @@ int main(int argc, char* argv[]) {
         cout<<" -1 : squared=true (default false)\n";  
 	cout<<" -2 : normalize_weights=false (default true)\n";
 	cout<<" -3 : reset_com=false (default true) \n";
-	cout<<"  0 : normal rmsd/msd calculation  (default: always done)\n";
+	cout<<"  0 : normal rmsd/msd calculation  and derivative dumps (default: always done)\n";
 	cout<<"  1 : findiff test for  d msd / d position  (inhomogenehous weights)\n";
 	cout<<"  2 : findiff test for  d msd / d reference (inhomogenehous weights)\n";
 	cout<<"  3 : findiff test for  d msd / d position  (homogenehous weights)\n";
@@ -119,6 +120,23 @@ int main(int argc, char* argv[]) {
   	double r=rmsd->calculate( run, squared ); 
 	cout<<"RMSD IS "<<r<<"\n";	
 	// now dump some more information
+        ofstream myfile;
+        myfile.open ("output_rmsd");
+	myfile<<"RMSD ";
+        myfile.setf( std::ios::fixed, std:: ios::floatfield );
+	myfile.width(12);myfile.precision(6); myfile<<std::right<<r<<"\n";
+	// the derivatives
+	for(unsigned int i=0;i<run.size();++i){
+	 myfile<<"DDIST_DPOS "<<std::setw(12)<<std::right<<rmsd->getAtomDerivative(i)[0]<<" "<<std::setw(12)<<std::right<<rmsd->getAtomDerivative(i)[1]<<" "<<std::setw(12)<<std::right<<rmsd->getAtomDerivative(i)[2]<<"\n";
+	}
+        std::vector<Vector> DDistDRef;	
+	r=rmsd->calculate_DDistDRef( run, squared ,DDistDRef); 
+	for(unsigned int i=0;i<run.size();++i){
+	 myfile<<"DDIST_DREF "<<std::setw(12)<<std::right<<DDistDRef[i][0]<<" "<<std::setw(12)<<std::right<<DDistDRef[i][1]<<" "<<std::setw(12)<<std::right<<DDistDRef[i][2]<<"\n";
+	}
+	
+	myfile.close();
+
   }
   // Task 1: calculate findiff of running frame
   if(std::find(task.begin(), task.end(), 1)!=task.end()){
@@ -360,7 +378,8 @@ int main(int argc, char* argv[]) {
 	std::vector<Vector> alignedpos;
 	std::vector<Vector> centeredpos;
 	std::vector<Vector> centeredref;
-	rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
+	std::vector<Vector> ddistdpos;
+	rmsd->calc_PCA( run, squared, Rotation , ddistdpos, DRotDPos , alignedpos ,centeredpos, centeredref ); 
 	myfile.open ("aligned.pdb");		
 	k=0;
 	for(std::vector<AtomNumber>::iterator i=at.begin(); i!=at.end(); i++){
@@ -402,7 +421,8 @@ int main(int argc, char* argv[]) {
         std::vector<Vector> alignedpos;
         std::vector<Vector> centeredpos;
         std::vector<Vector> centeredref;
-	rmsd->calc_PCA( run, squared, OldRotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
+	std::vector<Vector> ddistdpos;
+	rmsd->calc_PCA( run, squared, OldRotation , ddistdpos, DRotDPos , alignedpos ,centeredpos, centeredref ); 
 	std::vector<Vector> run_save=run;	
 	for(unsigned int a=0;a<3;a++){	
 		for(unsigned int b=0;b<3;b++){	
@@ -410,7 +430,7 @@ int main(int argc, char* argv[]) {
 				for(unsigned int i=0;i<run.size();++i){
 					//change the position		
 					run[i][comp]+=eps;
-					rmsd->calc_PCA( run, squared, Rotation , DRotDPos , alignedpos ,centeredpos, centeredref ); 
+					rmsd->calc_PCA( run, squared, Rotation , ddistdpos, DRotDPos , alignedpos ,centeredpos, centeredref ); 
 					cout<<"DROT_DPOS_INVERSE_TRANSFORM COMPONENT "<<comp<<" "<<(Rotation[a][b]-OldRotation[a][b])/(run[i][comp]-run_save[i][comp])<<" "<<DRotDPos[a][b][i][comp]<<"\n";
 					// restore the old position
 					run=run_save;
