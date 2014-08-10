@@ -150,9 +150,11 @@ public:
   virtual const std::vector<AtomNumber>& getAbsoluteIndexes();
   virtual const std::vector<std::string>& getArgumentNames();
 /// Stuff for pca
-  virtual bool pcaIsEnabledForThisReference() const { return false; }
+  virtual bool pcaIsEnabledForThisReference(){ return false; }
   virtual Vector getAtomicDisplacement( const unsigned& iatom ){ plumed_error(); return Vector(0.0,0.0,0.0); }
-  virtual double projectAtomicDisplacementOnVector( const unsigned& i, const Matrix<Vector>& eigv, std::vector<Vector>& derivatives ){ plumed_error(); return 1; }
+  virtual double projectAtomicDisplacementOnVector( const unsigned& i, const Matrix<Vector>& eigv, const std::vector<Vector>& pos, std::vector<Vector>& derivatives ){ 
+     plumed_error(); return 1; 
+  }
 /// Stuff for sanity checks on distance
   bool isDirection() const ;
 };

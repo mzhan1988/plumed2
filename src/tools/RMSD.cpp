@@ -112,11 +112,12 @@ void RMSD::setDisplace(const vector<double> & displace){
 double RMSD::calculate(const std::vector<Vector> & positions,std::vector<Vector> &derivatives, bool squared)const{
 
   double ret=0.;
+  std::vector<Vector> displacement( derivatives.size() );
 
   switch(alignmentMethod){
 	case SIMPLE:
 		//	do a simple alignment without rotation 
-		ret=simpleAlignment(align,displace,positions,reference,derivatives,squared);
+		ret=simpleAlignment(align,displace,positions,reference,displacement,derivatives,squared);
 		break;	
 	case OPTIMAL_FAST:
 		// this is calling the fastest option:
@@ -138,6 +139,7 @@ double RMSD::simpleAlignment(const  std::vector<double>  & align,
 		                     const  std::vector<double>  & displace,
 		                     const std::vector<Vector> & positions,
 		                     const std::vector<Vector> & reference ,
+                                     std::vector<Vector> & displacement, 
 		                     std::vector<Vector>  & derivatives, bool squared)const{
       double dist(0);
       unsigned n=reference.size();
@@ -158,9 +160,9 @@ double RMSD::simpleAlignment(const  std::vector<double>  & align,
 
       Vector shift=((apositions-areference)-(dpositions-dreference));
       for(unsigned i=0;i<n;i++){
-        Vector d=(positions[i]-apositions)-(reference[i]-areference);
-        dist+=displace[i]*d.modulo2();
-        derivatives[i]=2*(displace[i]*d+align[i]*shift);
+        displacement[i]=(positions[i]-apositions)-(reference[i]-areference);
+        dist+=displace[i]*displacement[i].modulo2();
+        derivatives[i]=2*(displace[i]*displacement[i]+align[i]*shift);
       }
 
      if(!squared){
