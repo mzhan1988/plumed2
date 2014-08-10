@@ -105,6 +105,7 @@ argument_names(getNumberOfArguments())
   // Read in the metric style
   parse("METRIC",metricname); std::vector<AtomNumber> atom_numbers;
   ReferenceConfiguration* checkref=metricRegister().create<ReferenceConfiguration>( metricname );
+  if( checkref->isDirection() ) error("cannot use directions in analysis");
   // Check if we should read atoms
   ReferenceAtoms* hasatoms=dynamic_cast<ReferenceAtoms*>( checkref );
   if( hasatoms ){

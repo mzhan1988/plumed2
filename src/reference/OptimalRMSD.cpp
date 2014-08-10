@@ -34,6 +34,7 @@ public:
   OptimalRMSD(const ReferenceConfigurationOptions& ro);
   void read( const PDB& );
   double calc( const std::vector<Vector>& pos, const bool& squared );
+  bool pcaIsEnabledForThisReference() const { return false; }
 };
 
 PLUMED_REGISTER_METRIC(OptimalRMSD,"OPTIMAL")
