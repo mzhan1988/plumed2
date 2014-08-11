@@ -47,6 +47,9 @@ int main(int argc, char* argv[]) {
 	cout<<"  8 : do some timings for all the above routines and for a growing number of atoms\n";
 	cout<<"  9 : test the rotation order: print position.pdb reference.pdb aligned.pdb and check that it makes sense(should be reference aligned onto positions)\n";
 	cout<<" 10 : findiff test for  d Rot / d position  ( position -> reference ) \n";
+	cout<<" 11 : findiff test for  d Rot / d position  (homogenehous weights)  (reference->position)\n";
+	cout<<" 12 : findiff test for  d Rot / d reference  (homogenehous weights) (reference->position)\n";
+	
 
 	//return 0 ;
   }
@@ -173,11 +176,11 @@ int main(int argc, char* argv[]) {
 		}
 	}
   }
-  // Task 3 calculate findiff of running frame for fast version (align=displace)
-  std::vector<double> newalign(run.size(),1.); 
-  std::vector<double> newdisplace(run.size(),1.); 
-  rmsd->setReferenceAtoms( ref, newalign, newdisplace );
+ // Task 3 calculate findiff of running frame for alEqDis  version (align=displace)
   if(std::find(task.begin(), task.end(), 3)!=task.end()){
+	std::vector<double> newalign(run.size(),1.); 
+	std::vector<double> newdisplace(run.size(),1.); 
+	rmsd->setReferenceAtoms( ref, newalign, newdisplace );
 	cout<<"Task 3: calculates the finite difference for the running frame (fast version)"<<endl;
   	double r_old=rmsd->calculate( run, squared ); 
 	std::vector<Vector> run_save=run;	
@@ -192,9 +195,11 @@ int main(int argc, char* argv[]) {
 		}
 	}
   }
-  // Task 4: calculate findiff of reference frame for fast version (align=displace)
+  // Task 4: calculate findiff of reference frame for alEqDis version (align=displace)
   if(std::find(task.begin(), task.end(), 4)!=task.end()){
 	cout<<"Task 4: calculates the finite difference for the reference frame"<<endl;
+	std::vector<double> newalign(run.size(),1.); 
+	std::vector<double> newdisplace(run.size(),1.); 
 	rmsd->setReferenceAtoms( ref, align, displace );
   	double r_old=rmsd->calculate( run, squared ); 
   	//r_old=rmsd->calculate( run, squared ); 
@@ -439,6 +444,66 @@ int main(int argc, char* argv[]) {
 		}
 	}
   }
+  // Task 11: calculate findiff of derivative of the rotation matrix respect to running frame (homogenehous weights)
+  rmsd->setReferenceAtoms( ref, align, displace );
+  if(std::find(task.begin(), task.end(), 11)!=task.end()){
+	cout<<"Task 11: calculates the finite difference for derivative of the rotation matrix respect to the the running frame (homogeneous weights)"<<endl;
+	std::vector<double> newalign(run.size(),1.); 
+	std::vector<double> newdisplace(run.size(),1.); 
+	rmsd->setReferenceAtoms( ref, align, displace );
+  	
+	Tensor Rotation,OldRotation;
+	Matrix<std::vector<Vector> > DRotDPos(3,3);
+        std::vector<Vector> DDistDRef;
+	rmsd->calc_DDistDRef_Rot_DRotDPos( run, squared, DDistDRef, OldRotation , DRotDPos  ); 
+	std::vector<Vector> run_save=run;	
+	for(unsigned int a=0;a<3;a++){	
+		for(unsigned int b=0;b<3;b++){	
+			for(unsigned int comp=0;comp<3;comp++){	
+				for(unsigned int i=0;i<run.size();++i){
+					//change the position		
+					run[i][comp]+=eps;
+					rmsd->calc_DDistDRef_Rot_DRotDPos( run, squared, DDistDRef, Rotation , DRotDPos  ); 
+					cout<<"DROT_DPOS COMPONENT "<<comp<<" "<<(Rotation[a][b]-OldRotation[a][b])/(run[i][comp]-run_save[i][comp])<<" "<<DRotDPos[a][b][i][comp]<<"\n";
+					// restore the old position
+					run=run_save;
+				}
+			}
+		}
+	}
+  }
+
+  // Task 6: calculate findiff of derivative of the rotation matrix respect to reference frame 
+  if(std::find(task.begin(), task.end(), 12)!=task.end()){
+	cout<<"Task 12: calculates the finite difference for derivative of the rotation matrix respect to the the reference frame (homogeneous weights)"<<endl;
+	std::vector<double> newalign(run.size(),1.); 
+	std::vector<double> newdisplace(run.size(),1.); 
+	rmsd->setReferenceAtoms( ref, align, displace );
+  	
+	Tensor Rotation,OldRotation;
+	Matrix<std::vector<Vector> > DRotDPos(3,3),DRotDRef(3,3);
+        std::vector<Vector> DDistDRef;
+	rmsd->calc_DDistDRef_Rot_DRotDPos_DRotDRef( run, squared, DDistDRef, OldRotation , DRotDPos , DRotDRef ); 
+	std::vector<Vector> ref_save=ref;	
+	for(unsigned int a=0;a<3;a++){	
+		for(unsigned int b=0;b<3;b++){	
+			for(unsigned int comp=0;comp<3;comp++){	
+				for(unsigned int i=0;i<run.size();++i){
+					//change the position		
+					ref[i][comp]+=eps;
+					// this function below also reset the com of the reference (but not of the running frame)
+					rmsd->setReferenceAtoms( ref, align, displace );
+					rmsd->calc_DDistDRef_Rot_DRotDPos_DRotDRef( run, squared, DDistDRef, Rotation , DRotDPos, DRotDRef  ); 
+					cout<<"DROT_DREF COMPONENT "<<comp<<" "<<(Rotation[a][b]-OldRotation[a][b])/(ref[i][comp]-ref_save[i][comp])<<" "<<DRotDRef[a][b][i][comp]<<"\n";
+					// restore the old position
+					ref=ref_save;
+				}
+			}
+		}
+	}
+  }
+ 
+ 
 	
   return 0;
 }

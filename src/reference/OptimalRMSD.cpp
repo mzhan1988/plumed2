@@ -34,7 +34,8 @@ class RMSDCoreData
 {
 	private:
 		bool alEqDis;
-		bool distanceIsSquared;
+		// default is RMSD but can deliver the MSD
+		bool distanceIsMSD; 
 		bool hasDistance;
 		bool isInitialized;
 		bool safe;
@@ -65,7 +66,7 @@ class RMSDCoreData
 	public:
 		// the constructor (note: only references are passed, therefore is rather fast)
 		// note:: this aligns the reference onto the positions
-		RMSDCoreData(const std::vector<double> &a ,const std::vector<double> &d,const std::vector<Vector> &p, const std::vector<Vector> &r ):alEqDis(false),distanceIsSquared(false),hasDistance(false),isInitialized(false),safe(false),positions(p),reference(r),align(a),displace(d){};
+		RMSDCoreData(const std::vector<double> &a ,const std::vector<double> &d,const std::vector<Vector> &p, const std::vector<Vector> &r ):alEqDis(false),distanceIsMSD(false),hasDistance(false),isInitialized(false),safe(false),positions(p),reference(r),align(a),displace(d){};
 		//  does the core calc : first thing to call after the constructor	
 		void doCoreCalc(bool safe,bool alEqDis);
 		// retrieve the distance if required after doCoreCalc 
@@ -416,6 +417,8 @@ double OptimalRMSD::optimalAlignment(const  std::vector<double>  & align,
    return dist;    
 }
 
+#endif
+
 template <bool safe,bool alEqDis>
 double OptimalRMSD::optimalAlignment_DDistDRef(const  std::vector<double>  & align,
                               const  std::vector<double>  & displace,
@@ -550,7 +553,6 @@ void RMSDCoreData::doCoreCalc(bool safe,bool alEqDis){
 // This is positions*reference
   Tensor rr01;
 // second expensive loop: compute second moments wrt centers
-// TODO is  w=align[iat] actually right???
   for(unsigned iat=0;iat<n;iat++){
     double w=align[iat];
     rr00+=dotProduct(positions[iat]-cpositions,positions[iat]-cpositions)*w;
@@ -681,9 +683,7 @@ double RMSDCoreData::getDistance(bool squared){
 
   if(!isInitialized)plumed_merror("OptimalRMSD.cpp cannot calculate the distance without being initialized first by doCoreCalc ");
   dist=eigenvals[0]+rr00+rr11;
-  double prefactor=2.0;
   
-  if(!squared && alEqDis) prefactor*=0.5/sqrt(dist);
   if(safe || !alEqDis) dist=0.0;
   const unsigned n=static_cast<unsigned int>(reference.size());
   for(unsigned iat=0;iat<n;iat++){
@@ -695,9 +695,9 @@ double RMSDCoreData::getDistance(bool squared){
   }
   if(!squared){
   	dist=sqrt(dist);
-	distanceIsSquared=false;
+	distanceIsMSD=false;
   }else{
-	distanceIsSquared=true;
+	distanceIsMSD=true;
   }
   hasDistance=true;
   return dist; 
@@ -709,6 +709,7 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
   Vector ddist_dcpositions;
   derivatives.resize(n);
   double prefactor=2.0;
+  if(!distanceIsMSD && alEqDis) prefactor*=0.5/dist;
   if(!hasDistance)plumed_merror("getDPositionsDerivatives needs to calculate the distance via getDistance first !");
   if(!isInitialized)plumed_merror("getDPositionsDerivatives needs to initialize the coreData first!");
   vector<Vector> ddist_tmp(n);
@@ -735,7 +736,7 @@ std::vector<Vector> RMSDCoreData::getDDistanceDPositions(){
   if(!alEqDis){
     for(unsigned iat=0;iat<n;iat++)derivatives[iat]+=(ddist_dcpositions-csum)*align[iat]; 
   }
-  if(!distanceIsSquared){
+  if(!distanceIsMSD){
     if(!alEqDis){
       double xx=0.5/dist;
       for(unsigned iat=0;iat<n;iat++) derivatives[iat]*=xx;
@@ -750,6 +751,7 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
   Vector ddist_dcreference;
   derivatives.resize(n);
   double prefactor=2.0;
+  if(!distanceIsMSD && alEqDis) prefactor*=0.5/sqrt(dist);
   vector<Vector> ddist_tmp(n);
   Vector csum,tmp1,tmp2;
 
@@ -782,7 +784,7 @@ std::vector<Vector>  RMSDCoreData::getDDistanceDReference(){
   if(!alEqDis){
     for(unsigned iat=0;iat<n;iat++)derivatives[iat]+=(ddist_dcreference-csum)*align[iat]; 
   }
-  if(!distanceIsSquared){
+  if(!distanceIsMSD){
     if(!alEqDis){
       double xx=0.5/dist;
       for(unsigned iat=0;iat<n;iat++) derivatives[iat]*=xx;
@@ -920,7 +922,6 @@ Tensor RMSDCoreData::getRotationMatrixPositionsToReference(){
 
 
 
-#endif
 
 
 }
