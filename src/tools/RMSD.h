@@ -23,6 +23,8 @@
 #define __PLUMED_tools_RMSD_h
 
 #include "Vector.h"
+#include "Matrix.h"
+#include "Tensor.h"
 #include <vector>
 #include <string>
 
@@ -97,6 +99,10 @@ template <bool safe,bool alEqDis>
                           const  std::vector<double>  & displace,
                           const std::vector<Vector> & positions,
                           const std::vector<Vector> & reference ,
+                          std::vector<Vector>  & displacement,
+                          Vector& cpositions,
+                          Tensor& rotation,
+                          Matrix<Tensor>& drotation_drr01,
                           std::vector<Vector>  & derivatives, bool squared=false)const;
 /// Compute rmsd
   double calculate(const std::vector<Vector> & positions,std::vector<Vector> &derivatives, bool squared=false)const;

@@ -25,9 +25,7 @@
 #include "Exception.h"
 #include <cmath>
 #include <iostream>
-#include "Matrix.h"
 #include "Tools.h"
-#include "Tensor.h"
 
 using namespace std;
 namespace PLMD{
@@ -111,8 +109,8 @@ void RMSD::setDisplace(const vector<double> & displace){
 
 double RMSD::calculate(const std::vector<Vector> & positions,std::vector<Vector> &derivatives, bool squared)const{
 
-  double ret=0.;
-  std::vector<Vector> displacement( derivatives.size() );
+  double ret=0.; Vector cpos; Tensor rot; Matrix<Tensor> drot(3,3);
+  std::vector<Vector> displacement( positions.size() );
 
   switch(alignmentMethod){
 	case SIMPLE:
@@ -121,13 +119,13 @@ double RMSD::calculate(const std::vector<Vector> & positions,std::vector<Vector>
 		break;	
 	case OPTIMAL_FAST:
 		// this is calling the fastest option:
-                if(align==displace) ret=optimalAlignment<false,true>(align,displace,positions,reference,derivatives,squared); 
-                else                ret=optimalAlignment<false,false>(align,displace,positions,reference,derivatives,squared); 
+                if(align==displace) ret=optimalAlignment<false,true>(align,displace,positions,reference,displacement,cpos,rot,drot,derivatives,squared); 
+                else                ret=optimalAlignment<false,false>(align,displace,positions,reference,displacement,cpos,rot,drot,derivatives,squared); 
 		break;
 	case OPTIMAL:
 		// this is the fast routine but in the "safe" mode, which gives less numerical error:
-		if(align==displace) ret=optimalAlignment<true,true>(align,displace,positions,reference,derivatives,squared); 
-		else ret=optimalAlignment<true,false>(align,displace,positions,reference,derivatives,squared); 
+		if(align==displace) ret=optimalAlignment<true,true>(align,displace,positions,reference,displacement,cpos,rot,drot,derivatives,squared); 
+		else ret=optimalAlignment<true,false>(align,displace,positions,reference,displacement,cpos,rot,drot,derivatives,squared); 
 		break;	
   }	
 
@@ -181,6 +179,10 @@ double RMSD::optimalAlignment(const  std::vector<double>  & align,
                                      const  std::vector<double>  & displace,
                                      const std::vector<Vector> & positions,
                                      const std::vector<Vector> & reference ,
+                                     std::vector<Vector>  & displacement,
+                                     Vector& cpositions,
+                                     Tensor& rotation,
+                                     Matrix<Tensor>& drotation_drr01,
                                      std::vector<Vector>  & derivatives, bool squared)const{
   double dist(0);
   const unsigned n=reference.size();
@@ -192,9 +194,8 @@ double RMSD::optimalAlignment(const  std::vector<double>  & align,
 
   derivatives.resize(n);
 
-  Vector cpositions;
-
 // first expensive loop: compute centers
+  cpositions.zero();
   for(unsigned iat=0;iat<n;iat++){
     double w=align[iat];
     cpositions+=positions[iat]*w;
@@ -285,7 +286,6 @@ double RMSD::optimalAlignment(const  std::vector<double>  & align,
 // This is the rotation matrix that brings reference to positions
 // i.e. matmul(rotation,reference[iat])+shift is fitted to positions[iat]
 
-  Tensor rotation;
   rotation[0][0]=q[0]*q[0]+q[1]*q[1]-q[2]*q[2]-q[3]*q[3];
   rotation[1][1]=q[0]*q[0]-q[1]*q[1]+q[2]*q[2]-q[3]*q[3];
   rotation[2][2]=q[0]*q[0]-q[1]*q[1]-q[2]*q[2]+q[3]*q[3];
@@ -297,7 +297,6 @@ double RMSD::optimalAlignment(const  std::vector<double>  & align,
   rotation[2][1]=2*(-q[0]*q[1]+q[2]*q[3]);
 
   
-  Tensor drotation_drr01[3][3];
   if(!alEqDis){
     drotation_drr01[0][0]=2*q[0]*dq_drr01[0]+2*q[1]*dq_drr01[1]-2*q[2]*dq_drr01[2]-2*q[3]*dq_drr01[3];
     drotation_drr01[1][1]=2*q[0]*dq_drr01[0]-2*q[1]*dq_drr01[1]+2*q[2]*dq_drr01[2]-2*q[3]*dq_drr01[3];
@@ -326,21 +325,21 @@ double RMSD::optimalAlignment(const  std::vector<double>  & align,
 
 // third expensive loop: derivatives
   for(unsigned iat=0;iat<n;iat++){
-    Vector d(positions[iat]-cpositions - matmul(rotation,reference[iat]));
+    displacement[iat]=(positions[iat]-cpositions - matmul(rotation,reference[iat]));
     if(alEqDis){
 // there is no need for derivatives of rotation and shift here as it is by construction zero
 // (similar to Hellman-Feynman forces)
-      derivatives[iat]= prefactor*align[iat]*d;
-       if(safe) dist+=align[iat]*modulo2(d);
+      derivatives[iat]= prefactor*align[iat]*displacement[iat];
+       if(safe) dist+=align[iat]*modulo2(displacement[iat]);
     } else {
 // the case for align != displace is different, sob:
-      dist+=displace[iat]*modulo2(d);
+      dist+=displace[iat]*modulo2(displacement[iat]);
 // these are the derivatives assuming the roto-translation as frozen
-      derivatives[iat]=2*displace[iat]*d;
+      derivatives[iat]=2*displace[iat]*displacement[iat];
 // here I accumulate derivatives wrt rotation matrix ..
-      ddist_drotation+=-2*displace[iat]*extProduct(d,reference[iat]);
+      ddist_drotation+=-2*displace[iat]*extProduct(displacement[iat],reference[iat]);
 // .. and cpositions
-      ddist_dcpositions+=-2*displace[iat]*d;
+      ddist_dcpositions+=-2*displace[iat]*displacement[iat];
     }
   }
 
